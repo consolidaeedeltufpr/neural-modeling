@@ -4,13 +4,30 @@ Modelagem de Amplificador de Potência (PA) com redes neurais para predição de
 
 ---
 
+## 📑 Sumário
+
+- [Objetivo](#-objetivo)
+- [Estrutura do projeto](#-estrutura-do-projeto)
+- [Arquitetura do modelo](#-arquitetura-do-modelo)
+- [Formato esperado do CSV](#-formato-esperado-do-csv)
+- [Requisitos](#️-requisitos)
+- [Setup rápido](#-setup-rápido-windows)
+- [Execução](#️-execução)
+- [Testes](#-testes)
+- [Métricas](#-métricas)
+- [Solução de problemas](#️-solução-de-problemas)
+- [Limpeza de artefatos](#-limpeza-de-artefatos)
+- [Workflow de branches](#-workflow-de-branches)
+
+---
+
 ## ✅ Objetivo
 
-Este projeto implementa um pipeline para:
+Este projeto implementa um pipeline completo para:
 
-- carregar e preparar dados de PA;
-- treinar modelo neural para predição de saída complexa;
-- avaliar desempenho com métricas de regressão;
+- carregar e preparar dados de PA (normalização, divisão treino/teste);
+- treinar modelo de rede neural para predição de saída complexa (`I/Q`);
+- avaliar desempenho com métricas de regressão (MSE, NMSE, R²);
 - gerar relatório HTML com gráficos AM/AM e AM/PM.
 
 ---
@@ -20,21 +37,22 @@ Este projeto implementa um pipeline para:
 ```text
 neural-modeling/
 ├─ data/
-│  ├─ raw/
+│  ├─ raw/                           # dados brutos originais
 │  └─ processed/
-│     └─ data_in_out_PA_banda_simples.csv
+│     └─ dados_in_out_PA_banda_simples.csv
 ├─ reports/
 │  └─ validation.html                # gerado automaticamente
 ├─ scripts/
-│  └─ generate_report.py
+│  └─ generate_report.py             # pipeline completo: treino → avaliação → relatório
 ├─ src/
 │  ├─ __init__.py
-│  ├─ data_processing.py
-│  ├─ evaluate.py
-│  ├─ model.py
-│  ├─ plots.py
-│  └─ train.py
+│  ├─ data_processing.py             # normalização e divisão de dados
+│  ├─ evaluate.py                    # cálculo de métricas e resultados AM/AM–AM/PM
+│  ├─ model.py                       # definição da arquitetura MLP
+│  ├─ plots.py                       # geração dos gráficos
+│  └─ train.py                       # loop de treinamento
 ├─ tests/
+│  ├─ conftest.py
 │  ├─ test_data.py
 │  ├─ test_model.py
 │  └─ test_training.py
@@ -44,14 +62,33 @@ neural-modeling/
 
 ---
 
+## 🧠 Arquitetura do modelo
+
+O modelo padrão é um **MLP (Multilayer Perceptron)** com a seguinte topologia:
+
+| Camada  | Neurônios | Ativação |
+|---------|-----------|----------|
+| Entrada | 2         | —        |
+| Oculta 1| 32        | ReLU     |
+| Oculta 2| 32        | ReLU     |
+| Saída   | 2         | Linear   |
+
+- **Entradas:** `real_in`, `imag_in`
+- **Saídas:** `real_out`, `imag_out`
+- **Otimizador:** Adam
+- **Função de perda:** MSE
+
+---
+
 ## 📌 Formato esperado do CSV
 
-O pipeline aceita os esquemas de colunas:
+O pipeline aceita os seguintes esquemas de colunas:
 
-- `real_in, imag_in, real_out, imag_out` **(preferencial)**
-- `in_real, in_imag, out_real, out_imag` **(compatibilidade)**
+| Esquema         | Colunas                                     |
+|-----------------|---------------------------------------------|
+| **Preferencial**| `real_in, imag_in, real_out, imag_out`      |
 
-Exemplo de cabeçalho:
+Exemplo de cabeçalho (preferencial):
 
 ```csv
 real_in,imag_in,real_out,imag_out
@@ -61,22 +98,27 @@ real_in,imag_in,real_out,imag_out
 
 ## ⚙️ Requisitos
 
-- Python 3.10+ (recomendado)
+- Python 3.10+
 - `pip`
 - ambiente virtual (`venv`)
+
+Principais dependências (ver `requirements.txt`):
+- `tensorflow` / `keras`
+- `scikit-learn`
+- `numpy`, `pandas`
 
 ---
 
 ## 🚀 Setup rápido (Windows)
 
-1. Criar e ativar ambiente virtual:
+**1. Criar e ativar o ambiente virtual:**
 
 ```bat
 python -m venv .venv
 .\.venv\Scripts\activate
 ```
 
-2. Instalar dependências:
+**2. Instalar dependências:**
 
 ```bat
 pip install -r requirements.txt
@@ -88,71 +130,98 @@ pip install -r requirements.txt
 
 ### Gerar relatório completo (treino + avaliação + gráficos)
 
-Na raiz do projeto (`neural-modeling`):
+Execute sempre a partir da raiz do projeto (`neural-modeling/`):
 
 ```bat
 python scripts\generate_report.py
 ```
 
-Saída esperada no terminal (status):
-- `data: OK`
-- `train: OK`
-- `model: OK`
-- `evaluate: OK`
-- `plots: OK`
-- `report: OK`
+Saída esperada no terminal:
+
+```
+data: OK
+train: OK
+model: OK
+evaluate: OK
+plots: OK
+report: OK
+```
 
 Relatório gerado em:
 
-```text
+```
 reports/validation.html
 ```
 
 ---
 
-## 🧪 Métricas usadas
+## 🧪 Testes
 
-- **MSE**
-- **NMSE (dB)**
-- **R²**
+Para executar a suíte de testes unitários:
+
+```bat
+pytest tests/
+```
+
+Os testes cobrem:
+- pré-processamento de dados (`test_data.py`)
+- estrutura e saída do modelo (`test_model.py`)
+- consistência do treinamento (`test_training.py`)
 
 ---
 
-## 🧰 Solução de problemas
+## 📊 Métricas
 
-### 1) `ModuleNotFoundError: No module named 'src'`
-O script já injeta automaticamente a raiz do projeto no `sys.path`.  
-Execute sempre a partir da pasta `neural-modeling`:
+| Métrica   | Descrição |
+|-----------|-----------|
+| **MSE**   | Mean Squared Error — erro quadrático médio entre saída real e predita |
+| **NMSE**  | Normalized MSE em dB — $10\log_{10}\!\left(\frac{\text{MSE}}{\text{Var}(y)}\right)$ |
+| **R²**    | Coeficiente de determinação — fração da variância explicada pelo modelo |
+
+---
+
+## 🛠️ Solução de problemas
+
+### `ModuleNotFoundError: No module named 'src'`
+
+O script injeta automaticamente a raiz do projeto no `sys.path`. Certifique-se de executá-lo a partir de `neural-modeling/`:
 
 ```bat
 python scripts\generate_report.py
 ```
 
-### 2) `FileNotFoundError` do CSV
-Confirme se o arquivo usA o nome esperado:
-- `dados_in_out_PA_banda_simples.csv`
+### `FileNotFoundError` ao carregar o CSV
+
+Confirme que o arquivo existe em `data/processed/` com o nome exato:
+
+```
+dados_in_out_PA_banda_simples.csv
+```
 
 ---
 
 ## 🧹 Limpeza de artefatos
 
-Pode remover sem risco:
-- `__pycache__/`
-- `*.pyc`
-- `.pytest_cache/`
-- `reports/validation.html` (gerado automaticamente)
+Os seguintes itens podem ser removidos sem risco:
+
+```
+__pycache__/
+*.pyc
+.pytest_cache/
+reports/validation.html   ← gerado automaticamente
+```
 
 ---
 
-## 🔀 Workflow sugerido de branches
+## 🔀 Workflow de branches
 
-- `main`: estável
-- `develop`: integração
-- `feature/*`: novas funcionalidades
-- `experiment/*`: experimentos de modelagem
+| Branch         | Propósito                              |
+|----------------|----------------------------------------|
+| `main`         | versão estável e revisada              |
+| `develop`      | integração contínua de funcionalidades |
+| `feature/*`    | novas funcionalidades                  |
+| `experiment/*` | experimentos de modelagem              |
+
+Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para o fluxo detalhado de contribuição.
 
 ---
-
-## 📄 Licença
-
-Definir conforme política do projeto (ex.: MIT, Apache-2.0, uso acadêmico interno).
